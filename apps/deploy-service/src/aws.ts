@@ -1,12 +1,16 @@
+// apps/deploy-service/src/aws.ts
 import {
   S3Client,
   GetObjectCommand,
   PutObjectCommand,
-  ListObjectsV2Command, // <--- 1. Import this
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
+
+// ⚠️ CHECK THIS: Ensure this matches the bucket name you see in MinIO Console
+const BUCKET_NAME = "output"; // <--- CHANGE THIS to "local-outputs" if that's what you used!
 
 const s3 = new S3Client({
   region: "auto",
@@ -18,14 +22,26 @@ const s3 = new S3Client({
 });
 
 export async function downloadS3Folder(prefix: string) {
-  // 2. FIX: Use the Command pattern instead of s3.listObjectsV2
+  console.log(
+    `> Looking for files in Bucket: "${BUCKET_NAME}" with Prefix: "${prefix}"`
+  );
+
   const command = new ListObjectsV2Command({
-    Bucket: "local-outputs", // <--- 3. FIX: Ensure this matches your actual bucket name
+    Bucket: BUCKET_NAME,
     Prefix: prefix,
   });
 
-  // Send the command
+  // List all files
   const allFiles = await s3.send(command);
+
+  // DEBUG LOG: How many files did we find?
+  if (!allFiles.Contents || allFiles.Contents.length === 0) {
+    console.error(
+      "❌ CRITICAL: No files found in S3! Check your Bucket Name and Prefix."
+    );
+    return;
+  }
+  console.log(`> Found ${allFiles.Contents.length} files. Downloading...`);
 
   const allPromises =
     allFiles.Contents?.map(async ({ Key }) => {
@@ -44,7 +60,7 @@ export async function downloadS3Folder(prefix: string) {
         }
 
         const getCommand = new GetObjectCommand({
-          Bucket: "local-outputs", // <--- Ensure consistent bucket name
+          Bucket: BUCKET_NAME, // Use the constant
           Key,
         });
 
@@ -58,17 +74,37 @@ export async function downloadS3Folder(prefix: string) {
       });
     }) || [];
 
-  console.log("Downloading...");
   await Promise.all(allPromises?.filter((x) => x !== undefined));
 }
 
 export const uploadFinalDist = async (id: string) => {
-  const folderPath = path.join(__dirname, `output/${id}/dist`);
-  const allFiles = getAllFiles(folderPath);
+  // 1. Determine where the build output is
+  const folderPath = path.join(__dirname, `output/${id}`);
+
+  let distFolderPath = path.join(folderPath, "dist");
+  if (!fs.existsSync(distFolderPath)) {
+    distFolderPath = path.join(folderPath, "build"); // Try 'build' for CRA
+  }
+
+  if (!fs.existsSync(distFolderPath)) {
+    console.error(
+      `❌ ERROR: Could not find 'dist' or 'build' folder in ${folderPath}`
+    );
+    return;
+  }
+
+  // 2. Upload files
+  const allFiles = getAllFiles(distFolderPath);
+
+  if (allFiles.length === 0) {
+    console.error("❌ ERROR: Build folder is empty!");
+    return;
+  }
 
   for (const file of allFiles) {
-    // Fix path slicing for Windows compatibility
-    const relativePath = file.slice(folderPath.length + 1).replace(/\\/g, "/");
+    const relativePath = file
+      .slice(distFolderPath.length + 1)
+      .replace(/\\/g, "/");
     await uploadFile(`dist/${id}/${relativePath}`, file);
   }
 };
@@ -92,7 +128,7 @@ const getAllFiles = (folderPath: string): string[] => {
 const uploadFile = async (fileName: string, localFilePath: string) => {
   const fileContent = fs.readFileSync(localFilePath);
   const command = new PutObjectCommand({
-    Bucket: "local-outputs",
+    Bucket: BUCKET_NAME,
     Key: fileName,
     Body: fileContent,
   });
