@@ -41,7 +41,7 @@ app.post("/deploy", async (req, res) => {
   await Promise.all(uploadS3);
 
   await client.lPush("build-queue", id);
-  console.log(`Added ${id} upload to build-queue`);
+  console.log(`Added project ID ${id} to build-queue`);
 
   res.json({ id: id, status: "uploaded" });
 });
