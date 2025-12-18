@@ -2,6 +2,7 @@ import express from "express";
 import { simpleGit } from "simple-git";
 import { getAllFiles } from "./utils.js";
 import { uploadFile } from "./aws.js";
+import { client } from "./redis.js";
 import path from "path";
 
 const app = express();
@@ -38,6 +39,9 @@ app.post("/deploy", async (req, res) => {
     return uploadFile(s3Key, file);
   });
   await Promise.all(uploadS3);
+
+  await client.lPush("build-queue", id);
+  console.log(`Added ${id} upload to build-queue`);
 
   res.json({ id: id, status: "uploaded" });
 });
