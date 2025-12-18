@@ -1,6 +1,7 @@
 import express from "express";
 import { simpleGit } from "simple-git";
 import { getAllFiles } from "./utils.js";
+import { uploadFile } from "./aws.js";
 import path from "path";
 
 const app = express();
@@ -24,11 +25,21 @@ app.post("/deploy", async (req, res) => {
     return res.status(400).json({ error: "Missing URL" });
   }
   const id = generateID();
+
   const outputPath = path.join("output", id);
   await simpleGit().clone(repoUrl, outputPath);
+
   const files = getAllFiles(outputPath);
   console.log(files);
-  res.json({ id: id });
+
+  const uploadS3 = files.map(async (file) => {
+    const relativePath = file.slice(outputPath.length + 1);
+    const s3Key = `output/${id}/${relativePath}`.replace(/\\/g, "/");
+    return uploadFile(s3Key, file);
+  });
+  await Promise.all(uploadS3);
+
+  res.json({ id: id, status: "uploaded" });
 });
 
 app.listen(PORT, () => {
