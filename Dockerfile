@@ -8,8 +8,8 @@ COPY tsconfig.json .
 
 # Copy the workspace packages
 COPY apps/upload-service/package.json apps/upload-service/
-COPY apps/deploy-service/package.json apps/deploy-service/
-COPY apps/request-handler/package.json apps/request-handler/
+COPY apps/build-service/package.json apps/build-service/
+COPY apps/request-service/package.json apps/request-service/
 
 # Install dependencies (from root)
 RUN npm install

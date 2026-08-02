@@ -13,7 +13,7 @@ services:
 
   request-handler:
     build: .
-    command: node apps/request-handler/dist/index.js
+    command: node apps/request-service/dist/index.js
     ports:
       - "3001:3001"
     environment:
@@ -22,7 +22,7 @@ services:
 
   build-server:
     build: .
-    command: node apps/deploy-service/dist/index.js
+    command: node apps/build-service/dist/index.js
     environment:
       - UPSTASH_REDIS_REST_URL=${UPSTASH_REDIS_REST_URL}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
